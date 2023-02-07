@@ -20,11 +20,27 @@ import { EventsModule } from './events/events.module';
 import { AuthModule } from './auth/auth.module';
 import { cacheModule } from './common/configs/redis.config';
 import { mailModule } from './common/configs/email.config';
+<<<<<<< Updated upstream
+=======
+import { EventsModule } from './events/events.module';
+import * as Joi from 'joi';
+>>>>>>> Stashed changes
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+      validationSchema: Joi.object({
+        DB_SYNCHRONIZE: Joi.boolean().required(),
+        DB_PORT: Joi.number().required(),
+        REDIS_PORT: Joi.number().required(),
+        EXPIRES_IN: Joi.number().required(),
+        REFRESH_TOKEN_EXPIRATION: Joi.number().required(),
+        TOKEN_EXPIRATION: Joi.number().required(),
+      }),
+    }),
     CacheModule.register(),
-    ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync(typeOrmConfig),
     MeetingsModule,
