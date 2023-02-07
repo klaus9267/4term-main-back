@@ -1,13 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty } from 'class-validator';
+import { IsNotEmpty, IsNumber } from 'class-validator';
 
 export class CreateFriendRequestDto {
-  @IsNotEmpty()
-  @ApiProperty({
-    example: 1,
-  })
-  senderNo: number;
-
+  @IsNumber()
   @IsNotEmpty()
   @ApiProperty({
     example: 2,

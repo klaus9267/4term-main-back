@@ -5,9 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Boards } from 'src/boards/entity/board.entity';
-import { CreateResponse } from 'src/boards/interface/boards.interface';
-import { BoardRepository } from 'src/boards/repository/board.repository';
+import { Board } from 'src/boards/interface/boards.interface';
+import { BoardsRepository } from 'src/boards/repository/board.repository';
 import { Connection, QueryRunner } from 'typeorm';
 import { CreateReportDto } from './dto/create-reports.dto';
 import { UpdateReportDto } from './dto/update-reports.dto';
@@ -15,6 +14,7 @@ import { Report } from './interface/reports.interface';
 import { ReportBoardRepository } from './repository/report-board.repository';
 import { ReportRepository } from './repository/reports.repository';
 import { ReportUserRepository } from './repository/report-user.repository';
+import { ResultSetHeader } from 'mysql2';
 
 @Injectable()
 export class ReportsService {
@@ -22,8 +22,8 @@ export class ReportsService {
     @InjectRepository(ReportRepository)
     private readonly reportRepository: ReportRepository,
 
-    @InjectRepository(BoardRepository)
-    private readonly boardRepository: BoardRepository,
+    @InjectRepository(BoardsRepository)
+    private readonly boardRepository: BoardsRepository,
 
     @InjectRepository(ReportBoardRepository)
     private readonly boardReportRepository: ReportBoardRepository,
@@ -98,7 +98,9 @@ export class ReportsService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
-      const board: Boards = await this.boardRepository.getBoardByNo(boardNo);
+      const board: Board<number[]> = await this.boardRepository.getBoardByNo(
+        boardNo,
+      );
       if (!board.no) {
         throw new BadRequestException(`
         게시글 신고 생성(createBoardReport): ${boardNo}번 게시글을 찾을 수 없습니다.
@@ -110,7 +112,7 @@ export class ReportsService {
         createReportDto,
       );
 
-      const { insertId }: CreateResponse = await queryRunner.manager
+      const { insertId }: ResultSetHeader = await queryRunner.manager
         .getCustomRepository(ReportBoardRepository)
         .createBoardReport(reportNo, boardNo);
 
@@ -148,7 +150,7 @@ export class ReportsService {
         createReportDto,
       );
 
-      const { insertId }: CreateResponse = await queryRunner.manager
+      const { insertId }: ResultSetHeader = await queryRunner.manager
         .getCustomRepository(ReportUserRepository)
         .createUserReport(reportNo, userNo);
 
@@ -174,7 +176,7 @@ export class ReportsService {
     queryRunner: QueryRunner,
     createReportDto: CreateReportDto,
   ): Promise<number> {
-    const { insertId }: CreateResponse = await queryRunner.manager
+    const { insertId }: ResultSetHeader = await queryRunner.manager
       .getCustomRepository(ReportRepository)
       .createReport(createReportDto);
 

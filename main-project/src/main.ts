@@ -9,13 +9,16 @@ import { ReturnInterceptor } from './common/interceptor/return-interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.enableCors();
   app.useGlobalInterceptors(new ReturnInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter()); // 전역 필터 적용
 
   const port = process.env.PORT;
+
   const config = new DocumentBuilder()
     .setTitle('4term project API')
     .setVersion('0.0.1')
+    .addBearerAuth({ in: 'header', type: 'http' })
     .build();
 
   const asyncApiOptions = new AsyncApiDocumentBuilder()

@@ -1,12 +1,12 @@
 import { InternalServerErrorException } from '@nestjs/common';
-import { InsertRaw } from 'src/meetings/interface/meeting.interface';
+import { ResultSetHeader } from 'mysql2';
 import { EntityRepository, InsertResult, Repository } from 'typeorm';
 import { ChatFileUrls } from '../entity/chat-file-urls.entity';
-import { FileUrlDetail } from '../interface/chat.interface';
+import { FileUrl } from '../interface/chat.interface';
 
 @EntityRepository(ChatFileUrls)
 export class ChatFileUrlsRepository extends Repository<ChatFileUrls> {
-  async saveFileUrl(fileUrlDetail: FileUrlDetail): Promise<InsertRaw> {
+  async saveFileUrl(fileUrlDetail: FileUrl[]): Promise<ResultSetHeader> {
     try {
       const { raw }: InsertResult = await this.createQueryBuilder()
         .insert()

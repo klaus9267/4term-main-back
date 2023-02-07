@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
@@ -10,7 +9,6 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { SignInDto } from './dto/sign-in.dto';
 import { UsersRepository } from 'src/users/repository/users.repository';
 import { MailerService } from '@nestjs-modules/mailer';
 import { VerifyEmailDto } from './dto/verify-email.dto';
@@ -29,6 +27,10 @@ import {
 import { Authentication } from './entity/authentication.entity';
 import { AuthConfig } from './config/auth.config';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdatePasswordDto } from './dto/update-password.dto';
+import { EntityManager } from 'typeorm';
+import { SignInDto } from './dto/sign-in.dto';
+import { MannersRepository } from 'src/manners/repository/manners.repository';
 
 @Injectable()
 export class AuthService {
@@ -43,71 +45,26 @@ export class AuthService {
     private readonly userProfileRepository: UserProfilesRepository,
   ) {}
 
-  async kakaoLogin(token: string): Promise<User> {
-    const kakaoUserInfoUrl = 'https://kapi.kakao.com/v2/user/me';
-    const headers = {
-      'Content-Type': 'application/x-www-form-urlencoded=utf-8',
-      Authorization: 'Bearer ' + token,
-    };
+  async loginBySocialEmail(
+    email: string,
+    manager: EntityManager,
+  ): Promise<User> {
+    const user: User = await this.createOrGetUser(email, manager);
+    const authentication: Authentication =
+      await this.authRepository.findAuthByUserNo(user.userNo);
 
-    const { data } = await axios({
-      method: 'GET',
-      url: kakaoUserInfoUrl,
-      timeout: 30000,
-      headers,
-    });
-
-    const { email } = data.kakao_account;
-    const user = await this.createOrGetUser(email);
+    if (authentication) {
+      throw new UnauthorizedException('자체 로그인 사용 유저');
+    }
 
     return await this.issueToken(user);
   }
 
-  async googleLogin(token: string): Promise<User> {
-    const googleUserInfoUrl =
-      'https://openidconnect.googleapis.com/v1/userinfo';
-    const headers = {
-      Authorization: 'Bearer ' + token,
-    };
-
-    const googleUser = await axios({
-      method: 'GET',
-      url: googleUserInfoUrl,
-      timeout: 30000,
-      headers,
-    });
-
-    const { email } = googleUser.data;
-    const user = await this.createOrGetUser(email);
-
-    return await this.issueToken(user);
-  }
-
-  async naverLogin(token: string): Promise<User> {
-    const naverUserInfoUrl = 'https://openapi.naver.com/v1/nid/me';
-    const headers = {
-      Authorization: 'Bearer ' + token,
-    };
-
-    const { data } = await axios({
-      method: 'GET',
-      url: naverUserInfoUrl,
-      timeout: 30000,
-      headers,
-    });
-
-    const { email } = data.response;
-    const user = await this.createOrGetUser(email);
-
-    return await this.issueToken(user);
-  }
-
-  async signIn({ email }: SignInDto): Promise<void> {
+  async getEmailCode(email: string): Promise<void> {
     await this.validateUserNotCreated(email);
-    const validationKey = randomBytes(7).toString('base64url');
-
+    const validationKey = this.getEmailValidationKey();
     await this.cacheManager.set(email, validationKey, {
-      ttl: AuthConfig.signInTokenExpiration,
+      ttl: AuthConfig.emailCodeExpiration,
     });
 
     await this.mailerService.sendMail({
@@ -117,21 +74,25 @@ export class AuthService {
     });
   }
 
-  async verifyEmail({ email, code, password }: VerifyEmailDto): Promise<User> {
+  async verifyEmail({ email, code }: VerifyEmailDto): Promise<void> {
     await this.validateUserNotCreated(email);
     await this.validateEmail(email, code);
+    await this.cacheManager.set(email, 'valid', {
+      ttl: AuthConfig.validEmailStoreExpiration,
+    });
+  }
 
-    const user: User = await this.createUserByEmail(email);
-    const userAuth: UserAuth = await this.createAuthentication(
-      user.userNo,
-      password,
-    );
-    const { affectedRows }: ResultSetHeader =
-      await this.authRepository.createAuth(userAuth);
-
-    if (!affectedRows) {
-      throw new InternalServerErrorException(`비밀번호 생성 오류입니다.`);
+  async signIn(
+    { email, password }: SignInDto,
+    manager: EntityManager,
+  ): Promise<User> {
+    await this.validateUserNotCreated(email);
+    if ((await this.cacheManager.get(email)) !== 'valid') {
+      throw new UnauthorizedException('인증되지 않은 이메일입니다.');
     }
+
+    const user: User = await this.saveUser(email, manager);
+    await this.saveAuthentication({ userNo: user.userNo, password }, manager);
 
     return user;
   }
@@ -141,7 +102,6 @@ export class AuthService {
     const userAuth: Authentication = await this.getUserAuthentication(
       user.userNo,
     );
-
     await this.validatePassword(userAuth, password);
 
     return await this.issueToken(user);
@@ -154,7 +114,6 @@ export class AuthService {
     if (!validIssuedDate) {
       throw new UnauthorizedException(`현재 로그인 정보가 없는 유저입니다.`);
     }
-
     if (iat !== validIssuedDate) {
       throw new UnauthorizedException(`다른 곳에서의 로그인 감지.`);
     }
@@ -165,9 +124,13 @@ export class AuthService {
   async refreshAccessToken(payload: Payload): Promise<string> {
     const accessToken = this.jwtService.sign(payload);
     const { iat }: any = this.jwtService.decode(accessToken);
+    const remainedTime = await this.cacheManager.ttl(payload.userNo);
 
     await this.cacheManager.set(payload.userNo, iat, {
-      ttl: await this.cacheManager.ttl(payload.userNo),
+      ttl:
+        remainedTime === -2
+          ? this.configService.get('TOKEN_EXPIRATION')
+          : remainedTime,
     });
 
     return accessToken;
@@ -178,10 +141,7 @@ export class AuthService {
   }
 
   async resetLoginFailedCount(email: string): Promise<void> {
-    const { userNo, status }: User = await this.getUserByEmail(email);
-    if (status !== UserStatus.CONFIRMED) {
-      throw new BadRequestException('아직 인증 절차를 마치지 않은 유저입니다.');
-    }
+    const { userNo }: User = await this.getUserByEmail(email);
 
     const { failedCount }: Authentication = await this.getUserAuthentication(
       userNo,
@@ -190,7 +150,7 @@ export class AuthService {
       throw new BadRequestException('로그인 시도 횟수가 남아 있는 유저입니다.');
     }
 
-    await this.authRepository.updateFailedCount(userNo, 0);
+    await this.resetFailedCount(userNo);
   }
 
   async sendPasswordToken(email: string): Promise<void> {
@@ -225,14 +185,66 @@ export class AuthService {
     await this.cacheManager.del(code);
   }
 
+  async updateUserPassword(
+    userNo: number,
+    { password, newPassword }: UpdatePasswordDto,
+  ): Promise<void> {
+    if (password === newPassword) {
+      throw new BadRequestException('새로운 비밀번호를 설정해 주세요.');
+    }
+
+    const userAuth: UserAuth = await this.getUserAuthentication(userNo);
+    if (!bcrypt.compareSync(password, userAuth.password)) {
+      throw new BadRequestException('올바르지 않은 비밀번호입니다.');
+    }
+
+    await this.updatePassword(userNo, newPassword);
+  }
+
+  private getSaltedPassword(password: string): string {
+    return bcrypt.hashSync(password, 3);
+  }
+
+  private async saveAuthentication(
+    userAuth: UserAuth,
+    manager: EntityManager,
+  ): Promise<void> {
+    userAuth.password = this.getSaltedPassword(userAuth.password);
+
+    const createAuthResult: ResultSetHeader = await manager
+      .getCustomRepository(AuthRepository)
+      .createAuth(userAuth);
+
+    if (!createAuthResult.affectedRows) {
+      throw new InternalServerErrorException(`비밀번호 생성 오류입니다.`);
+    }
+  }
+
+  private async resetFailedCount(userNo: number): Promise<void> {
+    const isFailedCountUpdated: number =
+      await this.authRepository.updateFailedCount(userNo, 0);
+
+    if (!isFailedCountUpdated) {
+      throw new InternalServerErrorException(
+        '비밀번호 틀린 횟수 변경 오류입니다.',
+      );
+    }
+  }
+
+  private getEmailValidationKey(): string {
+    const randomNumbers = Math.floor(Math.random() * 1000001);
+
+    return String(randomNumbers).padStart(6, '0');
+  }
+
   private async updatePassword(
     userNo: number,
     password: string,
   ): Promise<void> {
-    const userAuth: UserAuth = await this.createAuthentication(
+    const userAuth: UserAuth = {
       userNo,
-      password,
-    );
+      password: this.getSaltedPassword(password),
+    };
 
     const isPasswordUpdated: number = await this.authRepository.updatePassword(
       userAuth,
@@ -244,7 +256,6 @@ export class AuthService {
 
   private async getUserByEmail(email: string) {
     const user: User = await this.userRepository.getUserByEmail(email);
-
     if (!user) {
       throw new NotFoundException('회원가입을 하지 않은 이메일입니다.');
     }
@@ -259,7 +270,7 @@ export class AuthService {
 
     if (!userAuth) {
       throw new NotFoundException(
-        `인증 정보가 존재하지 않는 소셜 로그인 유저입니다.`,
+        '인증 정보가 존재하지 않는 소셜 로그인 유저입니다.',
       );
     }
 
@@ -292,24 +303,12 @@ export class AuthService {
     }
   }
 
-  private async createAuthentication(
-    userNo: number,
-    password: string,
-  ): Promise<UserAuth> {
-    const saltedPassword = bcrypt.hashSync(password, 3);
-
-    return {
-      password: saltedPassword,
-      userNo,
-    };
-  }
-
   private async validateUserNotCreated(email: string) {
     const user = await this.userRepository.getUserByEmail(email);
 
     if (user) {
       throw new BadRequestException(
-        `이미 가입된 회원입니다. 로그인을 이용해 주세요.`,
+        '이미 가입된 회원입니다. 로그인을 이용해 주세요.',
       );
     }
   }
@@ -318,33 +317,49 @@ export class AuthService {
     const validCode = await this.cacheManager.get(email);
 
     if (!validCode) {
-      throw new BadRequestException(
-        `인증 코드가 만료됐거나 발급 이력이 없는 이메일입니다. 코드를 요청해 주세요.`,
+      throw new NotFoundException(
+        '인증 코드가 만료됐거나 발급 이력이 없는 이메일입니다.',
       );
     }
 
     if (validCode !== code) {
-      throw new BadRequestException(`올바르지 않은 인증 코드입니다.`);
+      throw new BadRequestException('올바르지 않은 인증 코드입니다.');
     }
   }
 
-  private async createUserByEmail(email: string): Promise<User> {
-    const { insertId }: ResultSetHeader = await this.userRepository.createUser(
-      email,
-    );
+  private async saveManner(
+    userNo: number,
+    manager: EntityManager,
+  ): Promise<void> {
+    const mannerSavedResult: ResultSetHeader = await manager
+      .getCustomRepository(MannersRepository)
+      .createManner(userNo);
 
-    if (!insertId) {
-      throw new InternalServerErrorException(`유저 생성 오류(createUser)`);
+    if (!mannerSavedResult.affectedRows) {
+      throw new InternalServerErrorException('매너 생성 오류입니다.');
     }
+  }
+
+  private async saveUser(email: string, manager: EntityManager): Promise<User> {
+    const { insertId }: ResultSetHeader = await manager
+      .getCustomRepository(UsersRepository)
+      .createUser(email);
+    if (!insertId) {
+      throw new InternalServerErrorException('유저 생성 오류');
+    }
+    await this.saveManner(insertId, manager);
 
     return { userNo: insertId, status: UserStatus.NO_PROFILE };
   }
 
-  private async createOrGetUser(email: string): Promise<User> {
+  private async createOrGetUser(
+    email: string,
+    manager: EntityManager,
+  ): Promise<User> {
     const user: User = await this.userRepository.getUserByEmail(email);
 
     if (!user) {
-      return await this.createUserByEmail(email);
+      return await this.saveUser(email, manager);
     }
 
     return user;

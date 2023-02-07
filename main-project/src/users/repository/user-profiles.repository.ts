@@ -1,6 +1,7 @@
 import { InternalServerErrorException } from '@nestjs/common';
 import { ResultSetHeader } from 'mysql2';
 import { Payload } from 'src/auth/interface/auth.interface';
+import { UserStatus } from 'src/common/configs/user-status.config';
 import {
   EntityRepository,
   InsertResult,
@@ -13,6 +14,7 @@ import {
   UpdatedProfile,
   ProfileDetail,
   SearchedUser,
+  EntireProfile,
 } from '../interface/user.interface';
 
 @EntityRepository(UserProfile)
@@ -63,14 +65,10 @@ export class UserProfilesRepository extends Repository<UserProfile> {
     updatedProfile: UpdatedProfile,
   ): Promise<number> {
     try {
-      const { affected }: UpdateResult = await this.createQueryBuilder(
-        'user_profiles',
-      )
+      const { affected }: UpdateResult = await this.createQueryBuilder()
         .update()
         .set(updatedProfile)
-        .where('user_profiles.user_no = :userNo', {
-          userNo,
-        })
+        .where('user_no = :userNo', { userNo })
         .execute();
 
       return affected;
@@ -86,6 +84,7 @@ export class UserProfilesRepository extends Repository<UserProfile> {
       const searchedUsers: SearchedUser[] = await this.createQueryBuilder(
         'user_profiles',
       )
+        .leftJoin('user_profiles.userNo', 'users')
         .leftJoin('user_profiles.profileImage', 'profileImages')
         .select([
           'user_profiles.userNo AS userNo',
@@ -95,6 +94,7 @@ export class UserProfilesRepository extends Repository<UserProfile> {
         .where('user_profiles.nickname LIKE :nickname', {
           nickname: `%${nickname}%`,
         })
+        .andWhere('users.status = :status', { status: UserStatus.CONFIRMED })
         .getRawMany();
 
       return searchedUsers;
@@ -115,6 +115,22 @@ export class UserProfilesRepository extends Repository<UserProfile> {
     } catch (error) {
       throw new InternalServerErrorException(
         `${error} 닉네임이 일치하는 유저 조회 오류(getUserBySameNickname) :알 수 없는 서버 에러입니다.`,
+      );
+    }
+  }
+
+  async updateUserMajor(userNo: number, major: string): Promise<number> {
+    try {
+      const { affected }: UpdateResult = await this.createQueryBuilder()
+        .update()
+        .set({ major })
+        .where('user_no = :userNo', { userNo })
+        .execute();
+
+      return affected;
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `${error} 유저 학과 변경(updateUserMajor) :알 수 없는 서버 에러입니다.`,
       );
     }
   }

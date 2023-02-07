@@ -16,7 +16,7 @@ export class EventImages extends BaseEntity {
   @Column({ type: 'varchar', length: 255, nullable: false, name: 'image_url' })
   imageUrl: string;
 
-  @ManyToOne((type) => Events, (events) => events.eventImages, {
+  @ManyToOne((type) => Events, (events) => events.eventImage, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'event_no' })

@@ -23,6 +23,7 @@ import {
 import { UserProfile } from './user-profile.entity';
 import { Authentication } from 'src/auth/entity/authentication.entity';
 import { UserCertificates } from './user-certificate.entity';
+import { Manners } from 'src/manners/entity/manners.entity';
 
 @Entity('users')
 export class Users extends BaseEntity {
@@ -48,10 +49,10 @@ export class Users extends BaseEntity {
   deletedDate: Date;
 
   @OneToMany((type) => BoardGuests, (boardGuests) => boardGuests.userNo)
-  guestMembers: BoardGuests[];
+  boardGuest: BoardGuests[];
 
   @OneToMany((type) => BoardHosts, (boardHosts) => boardHosts.userNo)
-  hostMembers: BoardHosts[];
+  boardHost: BoardHosts[];
 
   @OneToMany((type) => BoardBookmarks, (boardBookmark) => boardBookmark.userNo)
   boardBookmark: BoardBookmarks;
@@ -80,8 +81,11 @@ export class Users extends BaseEntity {
   @OneToMany((type) => Enquiries, (enquiries) => enquiries.userNo)
   enquiry: Enquiries[];
 
-  @OneToOne((type) => UserProfile, (userProfile) => userProfile.userNo)
+  @OneToOne((type) => UserProfile, (userProfiles) => userProfiles.userNo)
   userProfileNo: UserProfile;
+
+  @OneToOne((type) => Manners, (manners) => manners.userNo)
+  mannerNo: Manners;
 
   @OneToMany((type) => ChatUsers, (chatUsers) => chatUsers.userNo)
   chatUserNo: ChatUsers[];

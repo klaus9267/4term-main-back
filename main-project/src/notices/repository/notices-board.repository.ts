@@ -1,11 +1,10 @@
 import { InternalServerErrorException } from '@nestjs/common';
-import { InsertRaw } from 'src/meetings/interface/meeting.interface';
 import { EntityRepository, InsertResult, Repository } from 'typeorm';
 import { NoticeBoards } from '../entity/notice-board.entity';
 
 @EntityRepository(NoticeBoards)
 export class NoticeBoardsRepository extends Repository<NoticeBoards> {
-  async saveNoticeBoard(noticeNo: number, boardNo: number) {
+  async saveNoticeBoard(noticeNo: number, boardNo: number): Promise<void> {
     try {
       const { raw }: InsertResult = await this.createQueryBuilder(
         'notice_boards',

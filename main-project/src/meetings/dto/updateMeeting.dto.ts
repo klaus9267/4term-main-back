@@ -18,12 +18,4 @@ export class UpdateMeetingDto {
     description: '약속 시간',
   })
   time: Date;
-
-  @IsNotEmpty()
-  @IsInt()
-  @ApiProperty({
-    example: 1,
-    description: '약속을 수정하려는 유저 번호',
-  })
-  userNo: number;
 }

@@ -8,7 +8,12 @@ import {
 } from 'typeorm';
 import { UserStatus } from '../../common/configs/user-status.config';
 import { Users } from '../entity/user.entity';
-import { User } from '../interface/user.interface';
+import {
+  EntireProfile,
+  ProfileImages,
+  User,
+  UserImages,
+} from '../interface/user.interface';
 
 @EntityRepository(Users)
 export class UsersRepository extends Repository<Users> {
@@ -45,7 +50,7 @@ export class UsersRepository extends Repository<Users> {
 
   async getUserByNo(userNo: number): Promise<Users> {
     try {
-      const user = await this.createQueryBuilder('users')
+      const user: Users = await this.createQueryBuilder('users')
         .where('users.no = :userNo', { userNo })
         .getOne();
 
@@ -89,7 +94,7 @@ export class UsersRepository extends Repository<Users> {
     }
   }
 
-  async deleteHaltedUsers(): Promise<void> {
+  async deleteUsersSuspendJoin(): Promise<void> {
     try {
       await this.createQueryBuilder()
         .delete()
@@ -101,7 +106,122 @@ export class UsersRepository extends Repository<Users> {
         .execute();
     } catch (error) {
       throw new InternalServerErrorException(
-        `${error} 가입 중단한 유저 삭제(deleteHaltedUsers): 알 수 없는 서버 에러입니다.`,
+        `${error} 가입 중단한 유저 삭제(deleteUsersSuspendJoin): 알 수 없는 서버 에러입니다.`,
+      );
+    }
+  }
+
+  async getNoCertificateUsers(): Promise<ProfileImages> {
+    try {
+      const users: ProfileImages = await this.createQueryBuilder('users')
+        .leftJoin('users.userProfileNo', 'profiles')
+        .leftJoin('profiles.profileImage', 'profileImages')
+        .select('profileImages.imageUrl')
+        .select('JSON_ARRAYAGG(profileImages.imageUrl) AS profileImages')
+        .where(
+          `status = ${UserStatus.NO_CERTIFICATE} OR status = ${UserStatus.DENIED}`,
+        )
+        .andWhere('DATEDIFF(NOW(), updated_date) >= 10')
+        .getRawOne();
+
+      return users;
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `${error} 가입 중단한 유저의 프로필 이미지 조회(getNoCertificateUsersImage): 알 수 없는 서버 에러입니다.`,
+      );
+    }
+  }
+
+  async getConfirmedUserByNo(userNo: number): Promise<Users> {
+    try {
+      const user: Users = await this.createQueryBuilder('users')
+        .where('users.no = :userNo', { userNo })
+        .andWhere('users.status = :status', { status: UserStatus.CONFIRMED })
+        .getOne();
+
+      return user;
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `${error} 가입 완료된 조회 에러(getConfirmedUserByNo): 알 수 없는 서버 에러입니다.`,
+      );
+    }
+  }
+
+  async getUsersByNums(userNo: number[]): Promise<number[]> {
+    try {
+      const user: Users = await this.createQueryBuilder('users')
+        .select(['JSON_ARRAYAGG(users.no) AS no'])
+        .where('no IN (:userNo)', { userNo })
+        .getRawOne();
+
+      const users: number[] = JSON.parse(String(user.no));
+
+      return users;
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `${error} 유저 조회 에러(getUsersByNo): 알 수 없는 서버 에러입니다.`,
+      );
+    }
+  }
+
+  async getDeletedUsersImages(): Promise<UserImages> {
+    try {
+      const userImages: UserImages = await this.createQueryBuilder('users')
+        .leftJoin('users.userCertificateNo', 'userCertificates')
+        .leftJoin('users.userProfileNo', 'userProfiles')
+        .leftJoin('userProfiles.profileImage', 'profileImages')
+        .select([
+          'JSON_ARRAYAGG(profileImages.imageUrl) AS profiles',
+          'JSON_ARRAYAGG(userCertificates.certificate) AS certificates',
+        ])
+        .where('DATEDIFF(NOW(), deleted_date) >= 10')
+        .getRawOne();
+
+      return userImages;
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `${error} 회원 탈퇴한 유저의 이미지 조회(getDeletedUsersImages): 알 수 없는 서버 에러입니다.`,
+      );
+    }
+  }
+
+  async hardDeleteUsers(): Promise<void> {
+    try {
+      await this.createQueryBuilder()
+        .delete()
+        .from(Users)
+        .where('DATEDIFF(NOW(), deleted_date) >= 10')
+        .execute();
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `${error} 회원 탈퇴한 유저 삭제(hardDeleteUsers): 알 수 없는 서버 에러입니다.`,
+      );
+    }
+  }
+
+  async getUserProfile(userNo: number): Promise<EntireProfile> {
+    try {
+      const profile: EntireProfile = await this.createQueryBuilder('users')
+        .leftJoin('users.userProfileNo', 'userProfiles')
+        .leftJoin('userProfiles.profileImage', 'profileImages')
+        .leftJoin('users.mannerNo', 'manners')
+        .select([
+          'users.no AS userNo',
+          'users.email AS email',
+          'userProfiles.nickname AS nickname',
+          'userProfiles.major AS major',
+          'userProfiles.gender AS gender',
+          'userProfiles.description AS description',
+          'profileImages.imageUrl AS profileImage',
+          'ROUND(manners.grade / manners.gradeCount, 1) AS grade',
+        ])
+        .where('users.no = :userNo', { userNo })
+        .getRawOne();
+
+      return profile;
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `${error} 프로필 조회 오류(getUserProfileByUserNo) :알 수 없는 서버 에러입니다.`,
       );
     }
   }

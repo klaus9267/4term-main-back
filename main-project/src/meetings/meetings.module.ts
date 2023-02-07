@@ -5,6 +5,7 @@ import { MeetingRepository } from './repository/meeting.repository';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NoticesRepository } from 'src/notices/repository/notices.repository';
 import { ChatListRepository } from 'src/chats/repository/chat-list.repository';
+import { ChatUsersRepository } from 'src/chats/repository/chat-users.repository';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { ChatListRepository } from 'src/chats/repository/chat-list.repository';
       MeetingRepository,
       NoticesRepository,
       ChatListRepository,
+      ChatUsersRepository,
     ]),
   ],
   providers: [MeetingsService],

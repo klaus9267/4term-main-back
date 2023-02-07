@@ -32,10 +32,10 @@ const valueToBoolean = (value: any) => {
   if (typeof value === 'boolean') {
     return value;
   }
-  if (['true', 'on', 'yes', '1'].includes(value.toLowerCase())) {
+  if ([true, 'true', '1', 1].includes(value.toLowerCase())) {
     return true;
   }
-  if (['false', 'off', 'no', '0'].includes(value.toLowerCase())) {
+  if ([false, 'false', '0', 0].includes(value.toLowerCase())) {
     return false;
   }
 

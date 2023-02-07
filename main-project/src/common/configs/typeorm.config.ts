@@ -10,9 +10,9 @@ export const typeOrmConfig: TypeOrmModuleAsyncOptions = {
     username: configService.get<string>('DB_USERNAME'),
     password: configService.get<string>('DB_PASSWORD'),
     database: configService.get<string>('DB_DATABASE'),
-    synchronize: true,
+    synchronize: false,
     entities: [__dirname + '/../../**/entity/*.entity.{js,ts}'],
-    logging: true,
+    logging: false,
   }),
   inject: [ConfigService],
 };

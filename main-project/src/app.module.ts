@@ -16,15 +16,19 @@ import { MannersModule } from './manners/manners.module';
 import { AwsModule } from './aws/aws.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AnnouncesModule } from './announces/announces.module';
-import { EventsModule } from './events/events.module';
 import { AuthModule } from './auth/auth.module';
 import { cacheModule } from './common/configs/redis.config';
 import { mailModule } from './common/configs/email.config';
+<<<<<<< HEAD
 <<<<<<< Updated upstream
 =======
 import { EventsModule } from './events/events.module';
 import * as Joi from 'joi';
 >>>>>>> Stashed changes
+=======
+import { EventsModule } from './events/events.module';
+import * as Joi from 'joi';
+>>>>>>> 1143b1d51985e7b37d93704de2fcd3be5b1e575b
 
 @Module({
   imports: [

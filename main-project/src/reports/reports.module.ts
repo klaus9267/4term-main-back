@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { BoardRepository } from 'src/boards/repository/board.repository';
+import { BoardsRepository } from 'src/boards/repository/board.repository';
 import { UsersRepository } from 'src/users/repository/users.repository';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
@@ -11,7 +11,7 @@ import { ReportUserRepository } from './repository/report-user.repository';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      BoardRepository,
+      BoardsRepository,
       ReportRepository,
       UsersRepository,
       ReportBoardRepository,

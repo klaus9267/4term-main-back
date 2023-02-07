@@ -48,5 +48,7 @@ jobs:
             - name: Docker run
               run: |
                   cd ~/summer
+                  docker-compose down
+                  docker rmi ghcr.io/klaus9267/summer-auto-deploy
                   docker-compose pull
                   docker-compose up -d

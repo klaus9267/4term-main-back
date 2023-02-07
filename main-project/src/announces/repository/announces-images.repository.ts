@@ -1,68 +1,36 @@
 import { InternalServerErrorException } from '@nestjs/common';
-import { CreateResponse } from 'src/boards/interface/boards.interface';
-import {
-  DeleteResult,
-  EntityRepository,
-  InsertResult,
-  Repository,
-} from 'typeorm';
-import { AnnouncesImages } from '../entity/announce-images.entity';
+import { EntityRepository, Repository } from 'typeorm';
+import { AnnounceImages } from '../entity/announce-images.entity';
+import { AnnounceImage } from '../interface/announces.interface';
 
-@EntityRepository(AnnouncesImages)
-export class AnnouncesImagesRepository extends Repository<AnnouncesImages> {
-  // 조회 관련
-  async getAnnouncesImages(announcesNo: number): Promise<AnnouncesImages> {
-    try {
-      const images: AnnouncesImages = await this.createQueryBuilder(
-        'announcesImages',
-      )
-        .select(['JSON_ARRAYAGG(announcesImages.imageUrl) AS imageUrl'])
-        .where('announcesImages.announcesNo = :announcesNo', { announcesNo })
-        .getRawOne();
-
-      return images;
-    } catch (error) {
-      throw new InternalServerErrorException(
-        `${error} getAnnouncesImages-repository: 알 수 없는 서버 에러입니다.`,
-      );
-    }
-  }
+@EntityRepository(AnnounceImages)
+export class AnnouncesImagesRepository extends Repository<AnnounceImages> {
   // 생성 관련
-  async uploadAnnouncesimagesUrl(
-    images: { announcesNo: number; imageUrl: string }[],
-  ): Promise<CreateResponse> {
+  async createAnnounceImages(images: AnnounceImage<string>[]): Promise<void> {
     try {
-      const { raw }: InsertResult = await this.createQueryBuilder(
-        'announcesImages',
-      )
+      await this.createQueryBuilder()
         .insert()
-        .into(AnnouncesImages)
+        .into(AnnounceImages)
         .values(images)
         .execute();
-
-      return raw;
     } catch (error) {
       throw new InternalServerErrorException(
-        `${error} uploadAnnouncesimagesUrl-repository: 알 수 없는 서버 에러입니다.`,
+        `${error} createAnnounceImages-repository: 알 수 없는 서버 에러입니다.`,
       );
     }
   }
 
   // 삭제 관련
-  async deleteAnnouncesImages(announcesNo: number): Promise<DeleteResult> {
+  async deleteAnnounceImages(announceNo: number): Promise<void> {
     try {
-      const affected: DeleteResult = await this.createQueryBuilder(
-        'announcesImages',
-      )
+      await this.createQueryBuilder()
         .delete()
-        .from(AnnouncesImages)
-        .where('announcesNo = :announcesNo', { announcesNo })
+        .from(AnnounceImages)
+        .where('announceNo = :announceNo', { announceNo })
         .execute();
-
-      return affected;
     } catch (error) {
       throw new InternalServerErrorException(
-        `${error} deleteAnnouncesImages-repository: 알 수 없는 서버 에러입니다.`,
+        `${error} deleteAnnounceImages-repository: 알 수 없는 서버 에러입니다.`,
       );
     }
   }

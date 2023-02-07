@@ -1,5 +1,5 @@
 import { InternalServerErrorException } from '@nestjs/common';
-import { CreateResponse } from 'src/boards/interface/boards.interface';
+import { ResultSetHeader } from 'mysql2';
 import {
   DeleteResult,
   EntityRepository,
@@ -67,7 +67,7 @@ export class ReportRepository extends Repository<Reports> {
   // 신고글 작성 관련
   async createReport(
     createReportDto: CreateReportDto,
-  ): Promise<CreateResponse> {
+  ): Promise<ResultSetHeader> {
     try {
       const { raw }: InsertResult = await this.createQueryBuilder()
         .insert()

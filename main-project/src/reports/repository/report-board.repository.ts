@@ -1,5 +1,5 @@
 import { InternalServerErrorException } from '@nestjs/common';
-import { CreateResponse } from 'src/boards/interface/boards.interface';
+import { ResultSetHeader } from 'mysql2';
 import { EntityRepository, InsertResult, Repository } from 'typeorm';
 import { ReportBoards } from '../entity/report-board.entity';
 import { Report } from '../interface/reports.interface';
@@ -34,7 +34,7 @@ export class ReportBoardRepository extends Repository<ReportBoards> {
   async createBoardReport(
     reportNo: number,
     boardNo: number,
-  ): Promise<CreateResponse> {
+  ): Promise<ResultSetHeader> {
     try {
       const { raw }: InsertResult = await this.createQueryBuilder()
         .insert()

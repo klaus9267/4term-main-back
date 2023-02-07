@@ -1,71 +1,43 @@
-export interface MeetingMembersList {
-  hostUserNo: number[];
-  guestUserNo: number[];
-}
-
-export interface ChatToCreate {
-  userNo?: number;
-  boardNo: number;
-  roomName?: string;
-}
-
-export interface ChatRoomUsers {
-  users: string;
-  userType: number;
-  chatRoomNo: number;
-}
-
-export interface JoinChatRoom {
-  userNo: number;
-  chatRoomNo: number;
-}
-
-export interface FileUrlDetail {
-  chatLogNo: number;
-  fileUrl: string;
-}
-
-export interface ChatRoomToSet {
-  guestNickname?: string;
-  hostNickname?: string;
-  roomName?: string;
-  userNo?: string;
-  guestUserNo?: string;
-  hostUserNo?: string;
-}
-
-export interface ChatRoomUser {
-  chatRoomNo: number;
-  nickname: string;
-  roomName: string;
-  meetingNo: number;
-  userNo: number;
-}
-
 export interface ChatRoom {
+  chatRoomNo: number;
   roomName: string;
-  chatRoomNo: number;
+  userNo?: number;
+  boardNo?: number;
+  chatRoomUsers?: number[];
+  roomNo?: string;
 }
 
-export interface PreviousChatLog {
-  userNo: number;
-  chatRoomNo: number;
-  currentChatLogNo?: number;
-  message?: string;
-  timeStamp?: Date;
+export interface ChatRoomOfBoard extends Partial<ChatRoom> {
+  hostsNickname: string;
+  guestsNickname: string;
+  hostsUserNo: string;
+  guestsUserNo: string;
 }
+export interface ChatRoomBeforeCreate extends Partial<ChatRoom> {}
 
-export interface ChatUserInfo {
-  userNo: number;
-  chatRoomNo: number;
+export interface ChatRoomWithUsers extends Partial<ChatRoom> {
+  users: string;
   userType?: number;
-  targetUserNo?: number;
+  chatUsers?: number[];
+  nickname?: string;
+}
+
+export interface ChatUser extends Partial<ChatRoom> {
+  userType: number;
+  nickname?: string;
+}
+
+export interface ChatUserValidation extends Partial<ChatRoom> {
+  isNeededUser: boolean;
+}
+
+export interface ChatRoomInvitation extends Partial<ChatRoom> {
+  targetUserNo: number;
+  userType?: number;
   type?: number;
 }
 
-export interface UserValidation {
-  userNo: number;
-  chatRoomNo: number;
-  isUserNeeded: boolean;
-  target: string;
+export interface FileUrl {
+  chatLogNo: number;
+  fileUrl: string;
 }

@@ -12,7 +12,7 @@ export class LoginDto {
 
   @IsNotEmpty()
   @ApiProperty({
-    description: '암호화된 사용자 비밀번호',
+    description: '사용자 비밀번호',
     example: '123@naver.com',
   })
   password: string;

@@ -20,6 +20,9 @@ export class UserCertificates extends BaseEntity {
   @JoinColumn({ name: 'user_no' })
   userNo: number;
 
+  @Column({ type: 'varchar', length: 45 })
+  major: string;
+
   @Column({ type: 'varchar', length: 255 })
   certificate: string;
 }

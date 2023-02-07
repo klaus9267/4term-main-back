@@ -14,6 +14,7 @@ export interface Friend {
   userNo?: number;
   friendNo?: number;
   friendUserNo?: number;
+  friendProfileImage?: string;
   receiverNo?: number;
   senderNo?: number;
 }
@@ -30,7 +31,8 @@ export interface FriendToSearch {
 
 export interface FriendInfo {
   friendNo: number;
-  nickname: string;
+  friendNickname: string;
+  friendProfileImage: string;
 }
 
 export interface NoticeFriend {

@@ -5,13 +5,6 @@ export class MessagePayloadDto {
   @IsNotEmpty()
   @IsNumber()
   @ApiProperty({
-    example: 1,
-  })
-  userNo: number;
-
-  @IsNotEmpty()
-  @IsNumber()
-  @ApiProperty({
     example: 3,
   })
   chatRoomNo: number;

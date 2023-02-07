@@ -1,9 +1,6 @@
 import { InternalServerErrorException } from '@nestjs/common';
+import { ResultSetHeader } from 'mysql2';
 import { NoticeType } from 'src/common/configs/notice-type.config';
-import {
-  InsertRaw,
-  MeetingUser,
-} from 'src/meetings/interface/meeting.interface';
 import {
   DeleteResult,
   EntityRepository,
@@ -13,178 +10,27 @@ import {
 } from 'typeorm';
 import { Notices } from '../entity/notices.entity';
 import {
-  Notice,
-  NoticeConditions,
-  NoticeDetail,
-  NoticeGuests,
-  NoticeMeeting,
+  UserNotice,
+  SavedNotice,
+  UpdatedNotice,
 } from '../interface/notice.interface';
 
 @EntityRepository(Notices)
 export class NoticesRepository extends Repository<Notices> {
-  async getNoticeInvitation(
-    userNo: number,
-    noticeNo: number,
-  ): Promise<NoticeMeeting> {
-    try {
-      const noticeMeeting: NoticeMeeting = await this.createQueryBuilder(
-        'notices',
-      )
-        .leftJoin(
-          'notices.noticeMeetings',
-          'noticeMeetings',
-          'notices.no = noticeMeetings.noticeNo',
-        )
-        .select([
-          'notices.no AS noticeNo',
-          'notices.type AS type',
-          'noticeMeetings.meetingNo AS meetingNo',
-          'notices.targetUserNo AS targetUserNo',
-        ])
-        .where('notices.no = :noticeNo AND notices.userNo = :userNo', {
-          noticeNo,
-          userNo,
-        })
-        .andWhere(
-          `notices.type = ${NoticeType.INVITE_GUEST} 
-          OR notices.type = ${NoticeType.INVITE_HOST}`,
-        )
-        .getRawOne();
-
-      return noticeMeeting;
-    } catch (err) {
-      throw err;
-    }
-  }
-
-  async getApplicationGuests(noticeNo: number): Promise<NoticeGuests> {
-    try {
-      const result = await this.createQueryBuilder('notices')
-        .leftJoin(
-          'notices.noticeMeetings',
-          'noticeMeetings',
-          'notices.no = noticeMeetings.noticeNo',
-        )
-        .leftJoin(
-          'notices.noticeGuests',
-          'noticeGuests',
-          'notices.no = noticeGuests.noticeNo',
-        )
-        .select([
-          'notices.no AS noticeNo',
-          'noticeMeetings.meetingNo AS meetingNo',
-          'notices.targetUserNo AS adminGuest',
-          `JSON_ARRAYAGG(noticeGuests.userNo) AS guests`,
-        ])
-        .where(`notices.no = :noticeNo AND notices.type =:type`, {
-          noticeNo,
-          type: NoticeType.APPLY_FOR_MEETING,
-        })
-        .groupBy('notices.no')
-        .getRawOne();
-
-      return result;
-    } catch (err) {
-      throw err;
-    }
-  }
-
-  async saveGuestNotice(noticeInfo: NoticeDetail): Promise<InsertRaw> {
+  async saveNotice(
+    notice: SavedNotice | SavedNotice[],
+  ): Promise<ResultSetHeader> {
     try {
       const { raw }: InsertResult = await this.createQueryBuilder('notices')
         .insert()
         .into(Notices)
-        .values(noticeInfo)
+        .values(notice)
         .execute();
 
       return raw;
-    } catch (err) {
+    } catch (error) {
       throw new InternalServerErrorException(
-        `${err} 알람 생성 에러(saveNotice): 알 수 없는 서버 오류입니다.`,
-      );
-    }
-  }
-
-  async getApplication({ meetingNo, userNo }: MeetingUser): Promise<Notice> {
-    try {
-      const notice: Notice = await this.createQueryBuilder('notices')
-        .leftJoin(
-          'notices.noticeMeetings',
-          'noticeMeetings',
-          'notices.no = noticeMeetings.noticeNo',
-        )
-        .select('notices.no AS noticeNo')
-        .where(
-          `noticeMeetings.meetingNo = :meetingNo 
-          AND notices.targetUserNo = :userNo AND notices.type = :type`,
-          { meetingNo, userNo, type: NoticeType.APPLY_FOR_MEETING },
-        )
-        .getRawOne();
-
-      return notice;
-    } catch (err) {
-      throw err;
-    }
-  }
-
-  async saveNotice(noticeInfo: NoticeDetail): Promise<InsertRaw> {
-    try {
-      const { raw }: InsertResult = await this.createQueryBuilder('notices')
-        .insert()
-        .into(Notices)
-        .values(noticeInfo)
-        .execute();
-
-      return raw;
-    } catch (err) {
-      throw new InternalServerErrorException(
-        `${err} 알람 생성 에러(saveNotice): 알 수 없는 서버 오류입니다.`,
-      );
-    }
-  }
-
-  async getNoticeById(noticeNo: number): Promise<Notice> {
-    try {
-      const notice: Notice = await this.createQueryBuilder('notices')
-        .select([
-          'notices.no AS noticeNo',
-          'notices.userNo AS userNo',
-          'notices.targetUserNo AS targetUserNo',
-          'notices.createdDate AS createdDate',
-          'notices.type AS type',
-          'IF(notices.readDatetime, TRUE, FALSE) AS isRead',
-        ])
-        .where('notices.no = :noticeNo', { noticeNo })
-        .getRawOne();
-
-      return notice;
-    } catch (err) {
-      throw new InternalServerErrorException(
-        `${err} 알림 조회 에러(getNoticeById): 알 수 없는 서버 오류입니다.`,
-      );
-    }
-  }
-
-  async getNoticeByConditions(
-    noticeConditions: NoticeConditions,
-  ): Promise<Notice[]> {
-    try {
-      const notices: Notice[] = await this.createQueryBuilder('notices')
-        .select([
-          'notices.no AS noticeNo',
-          'notices.targetUserNo AS targetUserNo',
-          'notices.type AS type',
-          'IF(notices.readDatetime, TRUE, FALSE) AS isRead',
-          'notices.value AS value',
-          'notices.createdDate AS createdDate',
-        ])
-        .where(noticeConditions)
-        .getRawMany();
-
-      return notices;
-    } catch (err) {
-      throw new InternalServerErrorException(
-        `${err} 조건에 해당하는 알림 조회(getNoticeByConditions): 알 수 없는 서버 오류입니다.`,
+        `${error} 알람 생성 에러(saveNotice): 알 수 없는 서버 오류입니다.`,
       );
     }
   }
@@ -198,32 +44,54 @@ export class NoticesRepository extends Repository<Notices> {
         .execute();
 
       return affected;
-    } catch (err) {
+    } catch (error) {
       throw new InternalServerErrorException(
-        `${err} 알림 삭제 에러(deleteNotice): 알 수 없는 서버 에러입니다.`,
+        `${error} 알림 삭제(deleteNotice): 알 수 없는 서버 에러입니다.`,
       );
     }
   }
 
-  async readNotice(no: number): Promise<number> {
+  async updateNotice(
+    no: number,
+    updatedNotice: UpdatedNotice,
+  ): Promise<number> {
     try {
       const { affected }: UpdateResult = await this.createQueryBuilder()
         .update(Notices)
-        .set({ readDatetime: new Date().toISOString() })
+        .set(updatedNotice)
         .where({ no })
         .execute();
 
       return affected;
-    } catch (err) {
+    } catch (error) {
       throw new InternalServerErrorException(
-        `${err} 알림 읽음 처리(readNotice): 알 수 없는 서버 에러입니다.`,
+        `${error} 알림 읽음 처리(readNotice): 알 수 없는 서버 에러입니다.`,
       );
     }
   }
 
-  async getNoticeByUserNo(userNo: number) {
+  async getNoticeByNo(noticeNo: number): Promise<Notices> {
     try {
-      const boardNotices = await this.createQueryBuilder('notices')
+      const notice: Notices = await this.createQueryBuilder('notices')
+        .select([
+          'user_no AS userNo',
+          'type AS type',
+          'target_user_no AS targetUserNo',
+        ])
+        .where('notices.no = :noticeNo', { noticeNo })
+        .getRawOne();
+
+      return notice;
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `${error} 알림 조회(getNoticeByNo): 알 수 없는 서버 오류입니다.`,
+      );
+    }
+  }
+
+  async getNoticeByUserNo(userNo: number): Promise<UserNotice[]> {
+    try {
+      const notices: UserNotice[] = await this.createQueryBuilder('notices')
         .leftJoin('notices.targetUserNo', 'users')
         .leftJoin('users.userProfileNo', 'userProfiles')
         .leftJoin('userProfiles.profileImage', 'profileImages')
@@ -232,31 +100,32 @@ export class NoticesRepository extends Repository<Notices> {
         .leftJoin('notices.noticeFriends', 'noticeFriends')
         .select([
           'notices.no AS noticeNo',
+          'notices.type AS type',
           'notices.targetUserNo AS senderUserNo',
           'userProfiles.nickname AS senderNickname',
           'profileImages.imageUrl AS senderProfileImage',
-          'notices.type AS type',
+          'IF(notices.readDatetime, TRUE, FALSE) AS isRead',
+          'DATE_FORMAT(notices.createdDate, "%Y-%m-%d %h:%i") AS createdDate',
           `CASE 
-            WHEN notices.type = ${NoticeType.APPLY_FOR_MEETING} 
-              THEN JSON_OBJECT("boardNo", noticeBoards.boardNo)
-            WHEN notices.type = ${NoticeType.APPLICATION_ACCEPTED} 
-              THEN JSON_OBJECT("chatNo", noticeChats.chatRoomNo, "boardNo", noticeBoards.boardNo)
             WHEN notices.type =${NoticeType.INVITE_GUEST} 
             OR notices.type = ${NoticeType.INVITE_HOST} 
               THEN JSON_OBJECT("chatRoomNo", noticeChats.chatRoomNo)
             WHEN notices.type = ${NoticeType.FRIEND_REQUEST}
             OR notices.type = ${NoticeType.FRIEND_REQUEST_ACCEPTED}
               THEN JSON_OBJECT("friendNo", noticeFriends.friendNo)
-          END AS value`,
-          'IF(notices.readDatetime, TRUE, FALSE) AS isRead',
+            WHEN notices.type = ${NoticeType.GUEST_REQUEST}
+              THEN JSON_OBJECT("boardNo", noticeBoards.boardNo)
+          END
+          AS value`,
         ])
         .where('notices.userNo = :userNo', { userNo })
+        .orderBy('notices.createdDate', 'DESC')
         .getRawMany();
 
-      return boardNotices;
-    } catch (err) {
+      return notices;
+    } catch (error) {
       throw new InternalServerErrorException(
-        `${err} 유저 번호로 알림 조회(getNoticeByUserNo): 알 수 없는 서버 오류입니다.`,
+        `${error} 유저 번호로 알림 조회(getNoticeByUserNo): 알 수 없는 서버 오류입니다.`,
       );
     }
   }

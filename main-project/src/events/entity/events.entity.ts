@@ -31,5 +31,14 @@ export class Events extends BaseEntity {
   deletedDate: Date;
 
   @OneToMany((type) => EventImages, (eventImages) => eventImages.eventNo)
-  eventImages: EventImages;
+  eventImage: EventImages;
+
+  @Column({
+    type: 'tinyint',
+    width: 1,
+    default: false,
+    nullable: true,
+    name: 'is_done',
+  })
+  isDone: boolean;
 }

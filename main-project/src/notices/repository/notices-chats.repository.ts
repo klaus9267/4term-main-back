@@ -1,6 +1,9 @@
 import { InternalServerErrorException } from '@nestjs/common';
 import { userInfo } from 'os';
-import { ChatUserInfo } from 'src/chats/interface/chat.interface';
+import {
+  ChatRoomInvitation,
+  ChatUser,
+} from 'src/chats/interface/chat.interface';
 import { EntityRepository, InsertResult, Repository } from 'typeorm';
 import { NoticeChats } from '../entity/notice-chat.entity';
 import { NoticeChatsInfo } from '../interface/notice.interface';
@@ -25,14 +28,18 @@ export class NoticeChatsRepository extends Repository<NoticeChats> {
     }
   }
 
-  async checkNoticeChat(chatUserInfo: ChatUserInfo): Promise<NoticeChats> {
+  async getNoticeChat(
+    ChatRoomInvitation: ChatRoomInvitation,
+  ): Promise<NoticeChats> {
     try {
-      const noticeChat = await this.createQueryBuilder('notice_chats')
+      const noticeChat: NoticeChats = await this.createQueryBuilder(
+        'notice_chats',
+      )
         .leftJoin('notice_chats.noticeNo', 'notices')
         .select(['notices.* '])
         .where(
           'notice_chats.chatRoomNo = :chatRoomNo AND notices.userNo = :userNo AND notices.type = :type AND notices.targetUserNo = :targetUserNo',
-          chatUserInfo,
+          ChatRoomInvitation,
         )
         .getRawOne();
 

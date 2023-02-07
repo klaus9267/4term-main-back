@@ -10,7 +10,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { AnnouncesImages } from './announce-images.entity';
+import { AnnounceImages } from './announce-images.entity';
 
 @Entity('announces')
 export class Announces extends BaseEntity {
@@ -33,8 +33,8 @@ export class Announces extends BaseEntity {
   deletedDate: Date;
 
   @OneToMany(
-    (type) => AnnouncesImages,
-    (announcesImages) => announcesImages.announcesNo,
+    (type) => AnnounceImages,
+    (announcesImages) => announcesImages.announceNo,
   )
-  announcesImages: AnnouncesImages;
+  announceImage: AnnounceImages;
 }

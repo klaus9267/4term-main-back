@@ -24,6 +24,14 @@ export class Meetings extends BaseEntity {
   @Column({ type: 'tinyint', width: 1, default: false, name: 'is_accepted' })
   isAccepted: boolean;
 
+  @Column({
+    type: 'tinyint',
+    width: 1,
+    default: false,
+    name: 'is_manner_requested',
+  })
+  isMannerRequested: boolean;
+
   @CreateDateColumn({ name: 'created_date' })
   createdDate: Date;
 

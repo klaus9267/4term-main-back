@@ -1,153 +1,217 @@
 import {
   BadRequestException,
   Injectable,
-  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ResultSetHeader } from 'mysql2';
-import { CreateResponse } from 'src/boards/interface/boards.interface';
-import { DeleteResult, UpdateResult } from 'typeorm';
-import { AnnouncesDto } from './dto/announce.dto';
-import { AnnouncesImages } from './entity/announce-images.entity';
-import { Announces } from './entity/announce.entity';
+import { AwsService } from 'src/aws/aws.service';
+import { Users } from 'src/users/entity/user.entity';
+import { UsersRepository } from 'src/users/repository/users.repository';
+import { EntityManager, UpdateResult } from 'typeorm';
+import { CreateAnnounceDto } from './dto/create-announce.dto';
+import { Announce, AnnounceImage } from './interface/announces.interface';
 import { AnnouncesRepository } from './repository/announce.repository';
 import { AnnouncesImagesRepository } from './repository/announces-images.repository';
 
 @Injectable()
 export class AnnouncesService {
-  private readonly s3: AWS.S3;
-
   constructor(
     @InjectRepository(AnnouncesRepository)
-    private readonly announcesRepository: AnnouncesRepository,
-
-    @InjectRepository(AnnouncesImagesRepository)
-    private readonly announcesImagesRepository: AnnouncesImagesRepository,
+    private readonly awsService: AwsService,
+    private readonly configService: ConfigService,
   ) {}
-  // 생성 관련
-  async createAnnounces(announcesDto: AnnouncesDto): Promise<void> {
-    const { affectedRows }: ResultSetHeader =
-      await this.announcesRepository.createAnnounces(announcesDto);
 
-    if (!affectedRows) {
-      throw new InternalServerErrorException(
-        `공지사항 생성(createAnnouncement-service): 알 수 없는 서버 에러입니다.`,
-      );
+  ADMIN_USER: number = Number(this.configService.get<number>('ADMIN_USER'));
+
+  // 생성 관련
+  async createAnnounce(
+    manager: EntityManager,
+    announcesDto: CreateAnnounceDto,
+    files: Express.Multer.File[],
+    userNo: number,
+  ): Promise<void> {
+    await this.validateAdmin(manager, userNo);
+    const announceNo: number = await this.setAnnounce(manager, announcesDto);
+
+    if (files.length) {
+      const imageUrls: string[] = await this.uploadImages(files);
+      await this.setAnnounceImages(manager, imageUrls, announceNo);
     }
   }
 
-  async uploadAnnouncesimagesUrl(
-    announcesNo: number,
-    uploadedImagesUrlList: string[],
-  ): Promise<string> {
-    await this.getAnnouncesByNo(announcesNo);
-    if (uploadedImagesUrlList.length === 0) {
-      throw new BadRequestException('사진이 없습니다.');
-    }
-    const images = uploadedImagesUrlList.map((url) => {
-      return { announcesNo, imageUrl: url };
-    });
+  private async setAnnounce(
+    manager: EntityManager,
+    announcesDto: CreateAnnounceDto,
+  ): Promise<number> {
+    const { insertId }: ResultSetHeader = await manager
+      .getCustomRepository(AnnouncesRepository)
+      .createAnnounce(announcesDto);
 
-    const { insertId }: CreateResponse =
-      await this.announcesImagesRepository.uploadAnnouncesimagesUrl(images);
+    return insertId;
+  }
 
-    if (!insertId) {
-      throw new InternalServerErrorException(
-        `이미지 업로드(uploadimagesUrl-service): 알 수 없는 서버 에러입니다.`,
-      );
-    }
+  private async setAnnounceImages(
+    manager: EntityManager,
+    imageUrls: string[],
+    announceNo: number,
+  ): Promise<void> {
+    const images: AnnounceImage<string>[] = await this.convertImageArray(
+      announceNo,
+      imageUrls,
+    );
 
-    return `이미지 업로드 성공`;
+    await manager
+      .getCustomRepository(AnnouncesImagesRepository)
+      .createAnnounceImages(images);
   }
 
   // 조회 관련
-  async getAllAnnounces(): Promise<Announces[]> {
-    const announces: Announces[] =
-      await this.announcesRepository.getAllAnnounces();
+  async getAnnounces(manager: EntityManager): Promise<Announce<string[]>[]> {
+    const announces: Announce<string[]>[] = await manager
+      .getCustomRepository(AnnouncesRepository)
+      .getAnnounces();
 
-    if (announces.length === 0) {
+    if (!announces.length) {
       throw new NotFoundException(
-        `공지사항 조회(getAnnouncements-service): 조건에 맞는 공지사항이 없습니다.`,
+        `공지사항 조회(getAnnounces-service): 공지사항이 없습니다.`,
       );
     }
 
     return announces;
   }
 
-  async getAnnouncesImages(announcesNo: number): Promise<string[]> {
-    const { imageUrl }: AnnouncesImages =
-      await this.announcesImagesRepository.getAnnouncesImages(announcesNo);
+  async getAnnounce(
+    manager: EntityManager,
+    announceNo: number,
+  ): Promise<Announce<string[]>> {
+    const announce: Announce<string[]> = await manager
+      .getCustomRepository(AnnouncesRepository)
+      .getAnnounce(announceNo);
 
-    if (!imageUrl) {
+    if (!announce.no) {
       throw new NotFoundException(
-        `이미지 조회(getImages-service): 이미지가 없습니다.`,
+        `공지사항 상세 조회(getAnnounce-service): ${announceNo}번 공지사항이 없습니다.`,
       );
     }
 
-    const images = JSON.parse(imageUrl);
+    return announce;
+  }
+
+  // 수정 관련
+  async editAnnounce(
+    manager: EntityManager,
+    userNo: number,
+    announcesNo: number,
+    announcesDto: CreateAnnounceDto,
+    files: Express.Multer.File[],
+  ): Promise<void> {
+    await this.validateAdmin(manager, userNo);
+    const { imageUrls }: Announce<string[]> = await this.getAnnounce(
+      manager,
+      announcesNo,
+    );
+
+    await this.updateAnnounce(manager, announcesNo, announcesDto);
+    await this.editAnnounceImages(manager, files, announcesNo, imageUrls);
+  }
+
+  private async editAnnounceImages(
+    manager: EntityManager,
+    files: Express.Multer.File[],
+    announceNo: number,
+    imageUrls: string[],
+  ): Promise<void> {
+    if (!imageUrls.includes(null)) {
+      await this.deleteAnnounceImages(manager, announceNo);
+      await this.awsService.deleteFiles(imageUrls);
+    }
+    if (files.length) {
+      const images: string[] = await this.uploadImages(files);
+      await this.setAnnounceImages(manager, images, announceNo);
+    }
+  }
+
+  private async updateAnnounce(
+    manager: EntityManager,
+    announceNo: number,
+    announcesDto: CreateAnnounceDto,
+  ) {
+    await manager
+      .getCustomRepository(AnnouncesRepository)
+      .updateAnnounce(announceNo, announcesDto);
+  }
+
+  // 삭제 관련
+  async deleteAnnounce(
+    manager: EntityManager,
+    announceNo: number,
+    userNo: number,
+  ): Promise<void> {
+    await this.validateAdmin(manager, userNo);
+    const { imageUrls }: Announce<string[]> = await this.getAnnounce(
+      manager,
+      announceNo,
+    );
+
+    if (!imageUrls.includes(null)) {
+      await this.awsService.deleteFiles(imageUrls);
+    }
+    await this.removeAnnounce(manager, announceNo);
+  }
+
+  private async removeAnnounce(
+    manager: EntityManager,
+    announceNo: number,
+  ): Promise<void> {
+    await manager
+      .getCustomRepository(AnnouncesRepository)
+      .deleteAnnounce(announceNo);
+  }
+
+  private async deleteAnnounceImages(
+    manager: EntityManager,
+    announceNo: number,
+  ): Promise<void> {
+    await manager
+      .getCustomRepository(AnnouncesImagesRepository)
+      .deleteAnnounceImages(announceNo);
+  }
+
+  // functions
+  private async convertImageArray(
+    announceNo: number,
+    imageUrls: string[],
+  ): Promise<AnnounceImage<string>[]> {
+    const images: AnnounceImage<string>[] = imageUrls.map(
+      (imageUrl: string) => {
+        return { announceNo, imageUrl };
+      },
+    );
 
     return images;
   }
 
-  async getAnnouncesByNo(announcesNo: number): Promise<Announces> {
-    const announces: Announces =
-      await this.announcesRepository.getAnnouncesByNo(announcesNo);
+  private async validateAdmin(manager: EntityManager, userNo: number) {
+    const { no }: Users = await manager
+      .getCustomRepository(UsersRepository)
+      .getUserByNo(userNo);
 
-    if (!announces) {
-      throw new NotFoundException(
-        `공지사항 상세 조회(getBoardByNo-service): ${announcesNo}번 공지사항이 없습니다.`,
-      );
-    }
-
-    return announces;
-  }
-
-  // 수정 관련
-  async updateAnnounces(
-    announcesNo: number,
-    announcesDto: AnnouncesDto,
-  ): Promise<void> {
-    await this.getAnnouncesByNo(announcesNo);
-
-    const { affected }: UpdateResult =
-      await this.announcesRepository.updateAnnounces(announcesNo, announcesDto);
-
-    if (!affected) {
-      throw new InternalServerErrorException(
-        `공지사항 수정(updateAnnouncement-service): 알 수 없는 서버 에러입니다.`,
-      );
-    }
-  }
-
-  // 삭제 관련
-  async deleteAnnouncesByNo(announcesNo: number): Promise<string> {
-    await this.getAnnouncesByNo(announcesNo);
-
-    const { affected }: DeleteResult =
-      await this.announcesRepository.deleteAnnouncesByNo(announcesNo);
-
-    if (!affected) {
+    if (no !== this.ADMIN_USER) {
       throw new BadRequestException(
-        `공지사항 삭제(deleteAnnouncesByNo-service): 알 수 없는 서버 에러입니다.`,
+        '관리자 검증(validateAdmin-service): 관리자가 아닙니다.',
       );
     }
-
-    return `${announcesNo}번 공지사항 삭제 성공`;
   }
 
-  async deleteAnnouncesImages(announcesNo: number): Promise<string> {
-    await this.getAnnouncesByNo(announcesNo);
+  // s3
+  private async uploadImages(files: Express.Multer.File[]): Promise<string[]> {
+    const imageUrls: string[] = await this.awsService.uploadImages(
+      files,
+      'announce',
+    );
 
-    const { affected }: DeleteResult =
-      await this.announcesImagesRepository.deleteAnnouncesImages(announcesNo);
-
-    if (!affected) {
-      throw new BadRequestException(
-        `이미지 삭제(deleteAnnouncesImages-service): 알 수 없는 서버 에러입니다.`,
-      );
-    }
-
-    return `이미지 삭제 성공`;
+    return imageUrls;
   }
 }

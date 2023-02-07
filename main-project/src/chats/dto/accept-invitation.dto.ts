@@ -1,6 +1,6 @@
 import { IsNotEmpty, IsNumber } from 'class-validator';
 
-export class AcceptInvitationDTO {
+export class AcceptInvitationDto {
   @IsNumber()
   @IsNotEmpty()
   inviterNo: number;
